@@ -1,0 +1,63 @@
+alias: RTE - Message tempo demain
+description: "Push RTE Tempo colour for tomorrow to mobile telegram and Alexa, each morning and evening"
+trigger:
+  - platform: state
+    entity_id:
+      - sensor.rte_tempo_prochaine_couleur
+  - platform: time
+    at: "20:00:00"
+condition: []
+action:
+  - choose:
+      - conditions:
+          - condition: and
+            conditions:
+              - condition: template
+                value_template: >-
+                  {{ states('sensor.rte_tempo_prochaine_couleur') !=
+                  'unavailable' }}
+              - condition: time
+                after: "08:10:00"
+        sequence: []
+    default:
+      - repeat:
+          until:
+            - condition: and
+              conditions:
+                - condition: template
+                  value_template: >-
+                    {{ states('sensor.rte_tempo_prochaine_couleur') !=
+                    'unavailable' }}
+                - condition: time
+                  after: "08:10:00"
+          sequence:
+            - delay: "00:10:00"
+  - variables:
+      common_message_debut: "Demain, la couleur de tempo sera "
+      common_message_fin: >-
+        {{ states.sensor.rte_tempo_prochaine_couleur_visuel.state }}{{
+        states('sensor.rte_tempo_prochaine_couleur')}}. Il reste
+        {{states('sensor.rte_tempo_cycle_jours_restants_rouge')}} jours rouges,
+        {{states('sensor.rte_tempo_cycle_jours_restants_blanc')}} jours blancs.
+      message_tel: "{{ common_message_debut }}{{ common_message_fin }}"
+      message_alexa: >-
+        {{ common_message_debut
+        }}{{states('sensor.rte_tempo_prochaine_couleur')}}
+      tempo_message_tel: >-
+        {% if states('sensor.rte_tempo_prochaine_couleur') == 'Rouge' %}
+        Attention ! {{ message_tel }} {% else %} Bonjour ! {{ message_tel }} {%
+        endif %}
+      tempo_message_alexa: >-
+        {% if states('sensor.rte_tempo_prochaine_couleur') == 'Rouge' %}
+        Attention !!! {{ message_alexa }}... Il faut passer en mode consomation
+        électrique minimale. {% else %} Bonjour ! {{ message_alexa }} {% endif
+        %}
+  - service: script.turn_on
+    target:
+      entity_id: script.managetts
+    data:
+      variables:
+        message_tel: "{{ tempo_message_tel }}"
+        message_alexa: "{{ tempo_message_alexa }}"
+        notification_alexa: <<replace by a name matching targetted Alexa>>
+mode: single
