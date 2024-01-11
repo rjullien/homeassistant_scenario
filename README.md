@@ -5,6 +5,7 @@ This repository contains some interesing scenario for HA
 ## Manage TTS ##
 
 Script to manage text to speach, phone and telegram push
+
 it needs 
 - an input to store the volume of Alexa and restore it after speaking. Volume is forced to 6 into the script
 - Telegram integration
