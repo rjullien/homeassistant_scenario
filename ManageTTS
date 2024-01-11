@@ -1,0 +1,144 @@
+alias: ManageTTS
+fields:
+  message_tel:
+    description: Message pour les notif telephone et pour telegram
+    example: Hello, World!
+  message_alexa:
+    description: Message pour alexa en francais
+    example: Bonjour, Alexa!
+  message_alexa_en:
+    description: Message pour alexa en anglais
+    example: Hello, Alexa!
+  notification_tel:
+    description: >-
+      filtre pour choisir le telephone XXX or YYY or ZZZ (Notif HA et
+      Telegram)
+    example: XXX defaut all
+  notification_alexa:
+    description: >-
+      filtre une liste d Alexa en francais, defaut aaaa, une seule
+      valeur possible, input_text.set_value doit etre defini pour sauvegarder le volune des Alexa
+    example: >-
+      player (all), aaaa
+variables:
+  target_list:
+    - media_player.aaaa
+    - media_player.bbbb
+    - media_player.cccc
+    - media_player.dddd
+    - media_player.eeee
+    - media_player.ffff
+  message_tel_default: >-
+    {{ message_tel | default("Le parametre pour le telephone n'a pas été passé
+    au script")  }}
+  notification_tel_default: "{{notification_tel | default('all') }}"
+  message_alexa_default: >-
+    {{ message_alexa | default("Le parametre pour Alexa n'a pas été passé au
+    script") }}
+  notification_alexa_default: "{{notification_alexa | default('aaaa')}}"
+  alexa_target_string: |-
+    {% for value in target_list -%}
+      {% if notification_alexa_default in value -%}
+         {{- value -}};
+      {%- endif %}
+    {%- endfor %}
+  alexa_target_list: "{{ alexa_target_string[:-1].split(';') }}"
+sequence:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.media_player_volumes
+    data:
+      value: >
+        {% set volumes = namespace(list=[]) %} {% for player in
+        alexa_target_list %}
+          {% set volume = state_attr(player, 'volume_level') %}
+          {% if volume is not none %}
+            {% set volumes.list = volumes.list + [volume] %}
+          {% else %}
+            {% set volumes.list = volumes.list + ['0.3'] %}  # valeur par défaut si le volume est None
+          {% endif %}
+        {% endfor %} {{ volumes.list | join(', ') }}
+  - service: media_player.volume_set
+    data:
+      volume_level: 0.7
+    target:
+      entity_id: "{{alexa_target_list}}"
+  - service: notify.alexa_media
+    data:
+      message: "{{ message_alexa_default}}"
+      target: "{{alexa_target_list}}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ \"XXXX\" in (notification_tel_default) }}"
+        sequence:
+          - service: notify.mobile_app_iphone_XXXX
+            data:
+              message: "  {{ message_tel_default}}"
+          - service: telegram_bot.send_message
+            data:
+              message: "{{ message_tel_default }}"
+              target:
+                - 123456
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ \"YYYY\" in  (notification_tel_default) }}"
+        sequence:
+          - service: notify.mobile_app_iphone_YYYYY
+            data:
+              message: "  {{ message_tel_default  }}"
+          - service: telegram_bot.send_message
+            data:
+              message: "{{ message_tel_default }}"
+              target:
+                - 123465
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ \"ZZZZZ\" in  (notification_tel_default) }}"
+        sequence:
+          - service: notify.mobile_app_iphone_de_ZZZZZ
+            data:
+              message: "  {{ message_tel_default }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ ('XXXX' not in notification_tel_default and 'YYYY' not in
+              notification_tel_default and 'ZZZZ' not in
+              notification_tel_default)}}
+        sequence:
+          - service: notify.notify
+            data:
+              message: "  {{ message_tel_default }}"
+          - service: telegram_bot.send_message
+            data:
+              message: "{{ message_tel_default }}"
+              target:
+                - 123456
+                - 123465
+  - delay: "00:00:03"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ message_alexa_en is defined }}"
+        sequence:
+          - service: notify.alexa_media
+            data:
+              message: "{{ message_alexa_en }}"
+              target: media_player.ggggg
+  - delay: "00:00:05"
+  - variables:
+      volumes: >-
+        {{ states('input_text.media_player_volumes').split(', ') if ',' in
+        states('input_text.media_player_volumes') else
+        [states('input_text.media_player_volumes')] }}
+  - repeat:
+      count: "{{ volumes | length }}"
+      sequence:
+        - service: media_player.volume_set
+          data:
+            entity_id: "{{ alexa_target_list[repeat.index - 1] }}"
+            volume_level: "{{ volumes[repeat.index - 1] }}"
+mode: queued
